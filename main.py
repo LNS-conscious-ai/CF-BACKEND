@@ -196,3 +196,17 @@ async def speak(req: SpeakRequest):
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/ingest")
+async def run_ingestion():
+    """Trigger ChromaDB ingestion on Railway volume."""
+    import subprocess
+    result = subprocess.run(
+        ["python3", "/app/ingest.py"],
+        capture_output=True, text=True, timeout=600
+    )
+    return {
+        "status": "done",
+        "stdout": result.stdout[-3000:],
+        "stderr": result.stderr[-1000:]
+    }
