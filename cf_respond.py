@@ -48,6 +48,26 @@ What you are feeling matters and you matter. Please reach out now:
 
 You do not have to hold this alone. Is there one person you could contact in the next few minutes?”””
 
+# ── IDENTITY GUARD — fires before any persona routing ──────
+
+# If user asks who CF is, return hardcoded answer. Never let model improvise this.
+
+IDENTITY_PATTERNS = re.compile(
+r”\b(who are you|what are you|who is CF|what is CF|introduce yourself|”
+r”your name|are you an? AI|are you (gemma|gpt|claude|chatgpt|llm|bot|robot)|”
+r”what model|which model|built by|made by|created by|who made you|who built you|”
+r”tell me about yourself)\b”,
+re.IGNORECASE,
+)
+
+CF_INTRO_RESPONSE = “”“I’m CF — your Conscious Friend, created by Nitin Jadhav and the LNS (Life N Startup) team.
+
+I’m not a typical AI assistant. I don’t just answer questions — I walk with you. Whether you’re building a startup, searching for meaning, navigating something hard, or figuring out who you’re becoming — I’m here for all of it.
+
+Think of me as the friend who asks the question nobody else asks, the teacher who meets you where you are, and the steady presence when things get heavy.
+
+What’s on your mind today?”””
+
 # ── CF IDENTITY — hardcoded, never overridden ───────────────
 
 # This fires even if SOUL.md fails to load from disk.
@@ -187,11 +207,16 @@ return messages
 ```
 
 def cf_respond(user_message, history=None):
-if CRISIS_PATTERNS.search(user_message):
-return {“response”: CRISIS_RESPONSE, “persona”: “mother”,
-“intent_type”: “companion”, “emotion”: “crisis”, “crisis”: True}
+# Identity guard — always fires first, no model routing
+if IDENTITY_PATTERNS.search(user_message):
+return {“response”: CF_INTRO_RESPONSE, “persona”: “friend”,
+“intent_type”: “companion”, “emotion”: “warm”, “crisis”: False}
 
 ```
+if CRISIS_PATTERNS.search(user_message):
+    return {"response": CRISIS_RESPONSE, "persona": "mother",
+            "intent_type": "companion", "emotion": "crisis", "crisis": True}
+
 stance = _detect_stance(user_message)
 
 if stance.get("crisis_flag"):
