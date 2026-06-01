@@ -36,7 +36,7 @@ app.add_middleware(
 
 DEEPINFRA_API_KEY  = os.environ.get("DEEPINFRA_API_KEY", "")
 ELEVENLABS_API_KEY = "sk_bcfe3c7ce61762050066883997f7e2a5c57fb506c030ac09"
-ELEVENLABS_VOICE_ID= os.environ.get("ELEVENLABS_VOICE_ID", "")
+ELEVENLABS_VOICE_ID = "jVIYITU8x2yaOctTAPIU"
 DEEPGRAM_API_KEY   = os.environ.get("DEEPGRAM_API_KEY", "")
 
 # ── REQUEST MODELS ────────────────────────────────────────
