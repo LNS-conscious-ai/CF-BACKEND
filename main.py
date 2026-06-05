@@ -145,7 +145,7 @@ async def transcribe(request: Request):
                 "https://api.deepgram.com/v1/listen?model=nova-3&language=en",
                 headers={
                     "Authorization": f"Token {DEEPGRAM_API_KEY}",
-                    "Content-Type":  "audio/webm",
+                    "Content-Type":  "application/octet-stream",
                 },
                 content=audio_data,
                 timeout=30,
