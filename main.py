@@ -236,14 +236,27 @@ raise HTTPException(status_code=400, detail=“No audio data received”)
 # Primary: ElevenLabs Scribe v2
 if ELEVENLABS_API_KEY:
     try:
+        # Auto-detect audio format from magic bytes (not Content-Type header)
+        if audio_data[:4] == b'\x1aE\xdf\xa3':
+            mime, ext = "audio/webm", "webm"
+        elif audio_data[4:8] == b'ftyp':
+            mime, ext = "audio/mp4", "mp4"
+        elif audio_data[:4] == b'RIFF':
+            mime, ext = "audio/wav", "wav"
+        elif audio_data[:3] == b'ID3' or (len(audio_data) > 1 and audio_data[0] == 0xff and (audio_data[1] & 0xe0) == 0xe0):
+            mime, ext = "audio/mpeg", "mp3"
+        elif audio_data[:4] == b'OggS':
+            mime, ext = "audio/ogg", "ogg"
+        else:
+            mime, ext = "application/octet-stream", "bin"
+
+        print(f"[SCRIBE] Received {len(audio_data)} bytes, detected format: {mime}")
+
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 "https://api.elevenlabs.io/v1/speech-to-text",
                 headers={"xi-api-key": ELEVENLABS_API_KEY},
-                # Auto-detect format from request Content-Type
-                ct = request.headers.get("content-type", "application/octet-stream")
-                ext = "mp4" if "mp4" in ct else "webm" if "webm" in ct else "wav"
-                files={"file": (f"audio.{ext}", audio_data, ct)},
+                files={"file": (f"audio.{ext}", audio_data, mime)},
                 data={"model_id": "scribe_v2", "language_code": "en"},
                 timeout=30,
             )
