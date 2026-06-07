@@ -94,8 +94,8 @@ async def status():
             for cname in ['foundational_books', 'meaning_first_startups', 'live_courses']:
                 try:
                     collections[cname] = _client.get_collection(cname).count()
-                except Exception:
-                    pass
+                except Exception as ce:
+                    collections[cname] = f'error: {str(ce)[:60]}'
             chroma_status = "connected"
     except Exception as e:
         collections = {}
