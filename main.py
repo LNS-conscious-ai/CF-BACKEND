@@ -13,9 +13,9 @@ Endpoints:
 
 import os, json, re, asyncio, time
 import httpx
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse, Response
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from cf_respond import cf_respond, CRISIS_PATTERNS, CRISIS_RESPONSE
@@ -42,8 +42,6 @@ DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "")
 ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU")
 DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "")
-ELEVENLABS_STT_MODEL = os.environ.get("ELEVENLABS_STT_MODEL", "scribe_v2")
-ELEVENLABS_TTS_MODEL = os.environ.get("ELEVENLABS_TTS_MODEL", "eleven_flash_v2_5")
 
 # ── REQUEST MODELS ────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -210,157 +208,120 @@ async def chat(req: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── TRANSCRIBE — ElevenLabs Scribe voice input ──
-def detect_audio_type(audio_data: bytes, content_type: str = ""):
-    """
-    Detect audio type from browser upload or raw audio body.
-    Supports webm, mp4/m4a, wav, mp3, ogg.
-    """
-    ct = (content_type or "").split(";")[0].strip().lower()
-
-    if ct in ("audio/webm", "video/webm"):
-        return "audio/webm", "webm"
-    if ct in ("audio/mp4", "video/mp4", "audio/m4a", "audio/x-m4a"):
-        return "audio/mp4", "mp4"
-    if ct in ("audio/wav", "audio/wave", "audio/x-wav"):
-        return "audio/wav", "wav"
-    if ct in ("audio/mpeg", "audio/mp3"):
-        return "audio/mpeg", "mp3"
-    if ct in ("audio/ogg", "application/ogg"):
-        return "audio/ogg", "ogg"
-
-    if audio_data[:4] == b"\x1aE\xdf\xa3":
-        return "audio/webm", "webm"
-    if len(audio_data) > 8 and audio_data[4:8] == b"ftyp":
-        return "audio/mp4", "mp4"
-    if audio_data[:4] == b"RIFF":
-        return "audio/wav", "wav"
-    if audio_data[:3] == b"ID3" or (len(audio_data) > 1 and audio_data[0] == 0xff and (audio_data[1] & 0xe0) == 0xe0):
-        return "audio/mpeg", "mp3"
-    if audio_data[:4] == b"OggS":
-        return "audio/ogg", "ogg"
-
-    return "application/octet-stream", "bin"
-
-
+# ── TRANSCRIBE — ElevenLabs Scribe REST (fallback for non-WebSocket clients) ──
 @app.post("/transcribe")
-async def transcribe(request: Request, file: Optional[UploadFile] = File(None)):
+async def transcribe(request: Request):
     """
-    Accepts user voice and returns text using ElevenLabs Scribe.
-    Works with frontend FormData file upload and raw audio body.
+    Accepts audio file, returns transcribed text.
+    Uses ElevenLabs Scribe v2 (primary) or Deepgram Nova-3 (fallback).
     """
-    if not ELEVENLABS_API_KEY:
-        raise HTTPException(status_code=503, detail="ELEVENLABS_API_KEY not configured")
-
-    audio_data = b""
-    filename = "audio.bin"
-    content_type = ""
-
-    if file is not None:
-        audio_data = await file.read()
-        filename = file.filename or filename
-        content_type = file.content_type or ""
-    else:
-        audio_data = await request.body()
-        content_type = request.headers.get("content-type", "")
-
+    audio_data = await request.body()
     if not audio_data or len(audio_data) < 100:
         raise HTTPException(status_code=400, detail="No audio data received")
 
-    mime, ext = detect_audio_type(audio_data, content_type)
+    # Primary: ElevenLabs Scribe v2
+    if ELEVENLABS_API_KEY:
+        try:
+            # Auto-detect audio format from magic bytes (not Content-Type header)
+            if audio_data[:4] == b'\x1aE\xdf\xa3':
+                mime, ext = "audio/webm", "webm"
+            elif audio_data[4:8] == b'ftyp':
+                mime, ext = "audio/mp4", "mp4"
+            elif audio_data[:4] == b'RIFF':
+                mime, ext = "audio/wav", "wav"
+            elif audio_data[:3] == b'ID3' or (len(audio_data) > 1 and audio_data[0] == 0xff and (audio_data[1] & 0xe0) == 0xe0):
+                mime, ext = "audio/mpeg", "mp3"
+            elif audio_data[:4] == b'OggS':
+                mime, ext = "audio/ogg", "ogg"
+            else:
+                mime, ext = "application/octet-stream", "bin"
 
-    if filename == "audio.bin":
-        filename = f"audio.{ext}"
+            print(f"[SCRIBE] Received {len(audio_data)} bytes, detected format: {mime}")
 
-    print(f"[TRANSCRIBE] bytes={len(audio_data)} mime={mime} filename={filename}")
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.elevenlabs.io/v1/speech-to-text",
+                    headers={"xi-api-key": ELEVENLABS_API_KEY},
+                    files={"file": (f"audio.{ext}", audio_data, mime)},
+                    data={"model_id": "scribe_v2", "language_code": "en"},
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                transcript = data.get("text", "").strip()
+                return {"transcript": transcript}
+        except Exception as e:
+            print(f"[SCRIBE ERROR] {e}")
+            # Fall through to Deepgram if available
 
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                "https://api.elevenlabs.io/v1/speech-to-text",
-                headers={"xi-api-key": ELEVENLABS_API_KEY},
-                files={"file": (filename, audio_data, mime)},
-                data={
-                    "model_id": ELEVENLABS_STT_MODEL,
-                },
-            )
+    # Fallback: Deepgram Nova-3
+    if DEEPGRAM_API_KEY:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.deepgram.com/v1/listen?model=nova-3&language=en",
+                    headers={
+                        "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                        "Content-Type":  "application/octet-stream",
+                    },
+                    content=audio_data,
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                transcript = (
+                    data.get("results", {})
+                        .get("channels", [{}])[0]
+                        .get("alternatives", [{}])[0]
+                        .get("transcript", "")
+                )
+                return {"transcript": transcript}
+        except Exception as e:
+            print(f"[DEEPGRAM ERROR] {e}")
 
-            if resp.status_code >= 400:
-                print(f"[SCRIBE ERROR BODY] {resp.text[:500]}")
+    raise HTTPException(status_code=503, detail="No STT service configured")
 
-            resp.raise_for_status()
-            data = resp.json()
-            transcript = data.get("text", "").strip()
-
-            return {
-                "transcript": transcript,
-                "provider": "elevenlabs",
-                "mime": mime,
-                "bytes": len(audio_data),
-            }
-
-    except Exception as e:
-        print(f"[SCRIBE ERROR] {repr(e)}")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)[:200]}")
-
-
-# ── SPEAK — ElevenLabs voice output ─
+# ── SPEAK — ElevenLabs voice output (with markdown strip) ─
 @app.post("/speak")
 async def speak(req: SpeakRequest):
     """
-    Converts CF text response to MP3 audio.
-    Safer version: returns completed audio bytes for browser playback.
+    Converts CF text response to audio.
+    Uses ElevenLabs Flash v2.5.
+    Strips markdown before sending to TTS.
     """
-    if not ELEVENLABS_API_KEY:
-        raise HTTPException(status_code=503, detail="ELEVENLABS_API_KEY not configured")
+    if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
+        raise HTTPException(status_code=503, detail="ElevenLabs not configured")
 
-    if not ELEVENLABS_VOICE_ID:
-        raise HTTPException(status_code=503, detail="ELEVENLABS_VOICE_ID not configured")
-
+    # Strip markdown so TTS doesn't speak asterisks/hashes
     clean_text = strip_markdown(req.text)
     if not clean_text:
         raise HTTPException(status_code=400, detail="No text to speak")
 
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}",
+                f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}/stream",
                 headers={
-                    "xi-api-key": ELEVENLABS_API_KEY,
+                    "xi-api-key":   ELEVENLABS_API_KEY,
                     "Content-Type": "application/json",
-                    "Accept": "audio/mpeg",
-                },
-                params={
-                    "output_format": "mp3_44100_128",
                 },
                 json={
-                    "text": clean_text,
-                    "model_id": ELEVENLABS_TTS_MODEL,
+                    "text":        clean_text,
+                    "model_id":    "eleven_flash_v2_5",
                     "voice_settings": {
-                        "stability": 0.5,
+                        "stability":        0.5,
                         "similarity_boost": 0.75,
                     },
                 },
+                timeout=60,
             )
-
-            if resp.status_code >= 400:
-                print(f"[TTS ERROR BODY] {resp.text[:500]}")
-
             resp.raise_for_status()
-
-            return Response(
-                content=resp.content,
-                media_type="audio/mpeg",
-                headers={
-                    "Cache-Control": "no-store",
-                    "Content-Disposition": 'inline; filename="cf_voice.mp3"',
-                },
+            return StreamingResponse(
+                resp.aiter_bytes(),
+                media_type="audio/mpeg"
             )
-
     except Exception as e:
-        print(f"[TTS ERROR] {repr(e)}")
-        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)[:200]}")
-
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ingest")
 async def run_ingestion():
