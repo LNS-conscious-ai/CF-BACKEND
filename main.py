@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
-from cf_respond import cf_respond, CRISIS_PATTERNS, CRISIS_RESPONSE, _client
+from cf_respond import cf_respond, CRISIS_PATTERNS, CRISIS_RESPONSE, _client, _embed_fn
 
 app = FastAPI(title="CF Backend · LNS", version="1.1.0")
 START_TIME = time.time()
@@ -90,13 +90,10 @@ async def status():
     # Check ChromaDB
     chroma_status = 'unknown'
     try:
-        import os as _os
-        cpath = str(getattr(_client, '_persist_directory', 'unknown'))
-        raw_list = _client.list_collections()
-        collections = {'_path': cpath, '_raw_list': str(raw_list)[:200]}
+        collections = {}
         for cname in ['foundational_books', 'meaning_first_startups', 'live_courses']:
             try:
-                collections[cname] = _client.get_or_create_collection(cname).count()
+                collections[cname] = _client.get_collection(cname, embedding_function=_embed_fn).count()
             except Exception as ce:
                 collections[cname] = f'error: {str(ce)[:60]}'
         chroma_status = 'connected'
