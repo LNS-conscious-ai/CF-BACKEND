@@ -88,19 +88,21 @@ async def status():
     minutes, secs = divmod(remainder, 60)
 
     # Check ChromaDB
-    chroma_status = "unknown"
+    chroma_status = 'unknown'
     try:
-            collections = {}
-            for cname in ['foundational_books', 'meaning_first_startups', 'live_courses']:
-                try:
-                    collections[cname] = _client.get_collection(cname).count()
-                except Exception as ce:
-                    collections[cname] = f'error: {str(ce)[:60]}'
-            chroma_status = "connected"
+        import os as _os
+        cpath = str(getattr(_client, '_persist_directory', 'unknown'))
+        raw_list = _client.list_collections()
+        collections = {'_path': cpath, '_raw_list': str(raw_list)[:200]}
+        for cname in ['foundational_books', 'meaning_first_startups', 'live_courses']:
+            try:
+                collections[cname] = _client.get_or_create_collection(cname).count()
+            except Exception as ce:
+                collections[cname] = f'error: {str(ce)[:60]}'
+        chroma_status = 'connected'
     except Exception as e:
-        collections = {}
-        chroma_status = f"error: {str(e)[:80]}"
-
+        collections = {'_error': f'{str(e)[:120]}'}
+        chroma_status = f'error: {str(e)[:80]}'
     return {
         "status": "ok",
         "version": "1.1.0",
