@@ -90,8 +90,13 @@ async def status():
     # Check ChromaDB
     chroma_status = "unknown"
     try:
-        collections = {c.name: c.count() for c in _client.list_collections()}
-        chroma_status = "connected"
+            collections = {}
+            for cname in ['foundational_books', 'meaning_first_startups', 'live_courses']:
+                try:
+                    collections[cname] = _client.get_collection(cname).count()
+                except Exception:
+                    pass
+            chroma_status = "connected"
     except Exception as e:
         collections = {}
         chroma_status = f"error: {str(e)[:80]}"
