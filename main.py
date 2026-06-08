@@ -38,10 +38,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "")
-ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU")
-DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "")
+DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "").strip()
+ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU").strip()
+DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "").strip()
 
 # ── REQUEST MODELS ────────────────────────────────────────
 class ChatRequest(BaseModel):
