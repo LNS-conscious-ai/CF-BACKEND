@@ -38,10 +38,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "").strip()
-ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "").strip()
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU").strip()
-DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "").strip()
+DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 
 # ── REQUEST MODELS ────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -68,7 +68,7 @@ def strip_markdown(text):
     s = re.sub(r'^\s*\d+\.\s+', '', s, flags=re.MULTILINE)   # 1. numbered
     s = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', s)          # [link](url)
     s = re.sub(r'\n{3,}', '\n\n', s)                          # excess newlines
-    return s.strip()
+    return s.strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 
 # ── HEALTH CHECK ──────────────────────────────────────────
 @app.get("/health")
@@ -149,7 +149,7 @@ async def chat_stream(req: ChatRequest):
     Streams response as Server-Sent Events (SSE).
     lns.life frontend connects here.
     """
-    if not req.message or not req.message.strip():
+    if not req.message or not req.message.strip().replace(chr(10),"").replace(chr(13),"").replace(" ",""):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     async def generate():
@@ -196,7 +196,7 @@ async def chat_stream(req: ChatRequest):
 @app.post("/chat")
 async def chat(req: ChatRequest):
     """Simple JSON response — fallback if frontend needs it."""
-    if not req.message or not req.message.strip():
+    if not req.message or not req.message.strip().replace(chr(10),"").replace(chr(13),"").replace(" ",""):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     try:
         loop = asyncio.get_event_loop()
@@ -248,7 +248,7 @@ async def transcribe(request: Request):
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                transcript = data.get("text", "").strip()
+                transcript = data.get("text", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
                 return {"transcript": transcript}
         except Exception as e:
             print(f"[SCRIBE ERROR] {e}")
