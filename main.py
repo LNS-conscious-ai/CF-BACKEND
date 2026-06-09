@@ -42,10 +42,6 @@ DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "").strip().replace(ch
 ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
-AZURE_SPEECH_KEY      = os.environ.get("AZURE_SPEECH_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
-AZURE_SPEECH_REGION   = os.environ.get("AZURE_SPEECH_REGION", "eastus").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
-AZURE_SPEECH_ENDPOINT = os.environ.get("AZURE_SPEECH_ENDPOINT", "").strip()
-
 
 # ── REQUEST MODELS ────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -288,71 +284,53 @@ async def transcribe(request: Request):
 # ── SPEAK — ElevenLabs voice output (with markdown strip) ─
 @app.post("/speak")
 async def speak(req: SpeakRequest):
-    """
-    Converts CF text response to audio.
-    Primary: Azure AI Speech (REST).
-    Fallback: ElevenLabs Flash v2.5.
-    Strips markdown before sending to TTS.
-    """
-    # Strip markdown so TTS doesn"t speak asterisks/hashes
-    clean_text = strip_markdown(req.text)
-    if not clean_text.w5rip():
-        raise HTTPException(status_code=400, detail="No text to speak")
-
-    # === Try Azure Speech first (primary) ===
-    if AZURE_SPEECH_KEY and AZURE_SPEECH_REGION:
-        try:
-            azure_url = f"https://{AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1"
-            ssml = (
-                '<speak version="1.0" xml:lang="en-US">'
-                '<voice name="en-US-AvaMultilingualNeural">'
-                f'{clean_text}'
-                '</voice>'
-                '</speak>'
-            )
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    azure_url,
-                    headers={
-                        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
-                        "Content-Type": "application/ssml+xml",
-                        "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
-                    },
-                    content=ssml.encode("utf-8"),
-                )
-            if resp.status_code == 200 and resp.content:
-                return Response(
-                    content=resp.content,
-                    media_type="audio/mpeg",
-                    headers={"Cache-Control": "no-store", "X-TTS-Provider": "azure"},
-                )
-            print(f"Azure TTS failed (status {resp.status_code}), falling back to ElevenLabs", flush=True)
-        except Exception as e:
-            print(f"Azure TTS exception: {e}, falling back to ElevenLabs", flush=True)
-
-    # === Fallback: ElevenLabs ===
-    if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
-        raise HTTPException(status_code=503, detail="All TTS providers unconfigured")
+    import traceback
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}/stream",
-                headers={
-                    "xi-api-key": ELEVENLABS_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "text": clean_text,
-                    "model_id": "eleven_flash_v2_5",
-                },
+        text = (req.text or "").strip()
+        if not text:
+            return JSONResponse(status_code=400, content={"error": "empty text"})
+
+        if not AZURE_SPEECH_KEY:
+            return JSONResponse(status_code=500, content={"error": "AZURE_SPEECH_KEY not set"})
+
+        region = AZURE_SPEECH_REGION or "eastus"
+        url = "https://" + region + ".tts.speech.microsoft.com/cognitiveservices/v1"
+
+        safe_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        ssml = (
+            "<speak version=\"1.0\" xml:lang=\"en-US\">"
+            "<voice name=\"en-US-AvaMultilingualNeural\">"
+            + safe_text +
+            "</voice></speak>"
+        )
+
+        headers = {
+            "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
+            "Content-Type": "application/ssml+xml",
+            "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
+            "User-Agent": "CF-BACKEND",
+        }
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.post(url, headers=headers, content=ssml.encode("utf-8"))
+
+        if r.status_code != 200:
+            return JSONResponse(
+                status_code=502,
+                content={"error": "azure_tts_failed", "status": r.status_code, "body": r.text[:500]},
             )
-        return Response(
-            content=resp.content,
+
+        return StreamingResponse(
+            iter([r.content]),
             media_type="audio/mpeg",
-            headers={"Cache-Control": "no-store", "X-TTS-Provider": "elevenlabs"},
+            headers={"X-TTS-Provider": "azure"},
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "type": type(e).__name__, "trace": traceback.format_exc()[-1500:]},
+        )
+
 @app.post("/ingest")
 async def run_ingestion():
     """Trigger ChromaDB ingestion on Railway volume."""
