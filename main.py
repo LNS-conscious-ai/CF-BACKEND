@@ -42,6 +42,10 @@ DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "").strip().replace(ch
 ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+AZURE_SPEECH_KEY      = os.environ.get("AZURE_SPEECH_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+AZURE_SPEECH_REGION   = os.environ.get("AZURE_SPEECH_REGION", "eastus").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+AZURE_SPEECH_ENDPOINT = os.environ.get("AZURE_SPEECH_ENDPOINT", "").strip()
+
 
 # ── REQUEST MODELS ────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -286,43 +290,69 @@ async def transcribe(request: Request):
 async def speak(req: SpeakRequest):
     """
     Converts CF text response to audio.
-    Uses ElevenLabs Flash v2.5.
+    Primary: Azure AI Speech (REST).
+    Fallback: ElevenLabs Flash v2.5.
     Strips markdown before sending to TTS.
     """
-    if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
-        raise HTTPException(status_code=503, detail="ElevenLabs not configured")
-
-    # Strip markdown so TTS doesn't speak asterisks/hashes
+    # Strip markdown so TTS doesn"t speak asterisks/hashes
     clean_text = strip_markdown(req.text)
-    if not clean_text:
+    if not clean_text.w5rip():
         raise HTTPException(status_code=400, detail="No text to speak")
 
+    # === Try Azure Speech first (primary) ===
+    if AZURE_SPEECH_KEY and AZURE_SPEECH_REGION:
+        try:
+            azure_url = f"https://{AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1"
+            ssml = (
+                '<speak version="1.0" xml:lang="en-US">'
+                '<voice name="en-US-AvaMultilingualNeural">'
+                f'{clean_text}'
+                '</voice>'
+                '</speak>'
+            )
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    azure_url,
+                    headers={
+                        "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
+                        "Content-Type": "application/ssml+xml",
+                        "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
+                    },
+                    content=ssml.encode("utf-8"),
+                )
+            if resp.status_code == 200 and resp.content:
+                return Response(
+                    content=resp.content,
+                    media_type="audio/mpeg",
+                    headers={"Cache-Control": "no-store", "X-TTS-Provider": "azure"},
+                )
+            print(f"Azure TTS failed (status {resp.status_code}), falling back to ElevenLabs", flush=True)
+        except Exception as e:
+            print(f"Azure TTS exception: {e}, falling back to ElevenLabs", flush=True)
+
+    # === Fallback: ElevenLabs ===
+    if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
+        raise HTTPException(status_code=503, detail="All TTS providers unconfigured")
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}/stream",
                 headers={
-                    "xi-api-key":   ELEVENLABS_API_KEY,
+                    "xi-api-key": ELEVENLABS_API_KEY,
                     "Content-Type": "application/json",
                 },
                 json={
-                    "text":        clean_text,
-                    "model_id":    "eleven_flash_v2_5",
-                    "voice_settings": {
-                        "stability":        0.5,
-                        "similarity_boost": 0.75,
-                    },
+                    "text": clean_text,
+                    "model_id": "eleven_flash_v2_5",
                 },
-                timeout=60,
             )
-            resp.raise_for_status()
-            return StreamingResponse(
-                resp.aiter_bytes(),
-                media_type="audio/mpeg"
-            )
+        return Response(
+            content=resp.content,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "no-store", "X-TTS-Provider": "elevenlabs"},
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/ingest")
 async def run_ingestion():
     """Trigger ChromaDB ingestion on Railway volume."""
