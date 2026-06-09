@@ -41,6 +41,9 @@ app.add_middleware(
 DEEPINFRA_API_KEY   = os.environ.get("DEEPINFRA_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 ELEVENLABS_API_KEY  = os.environ.get("ELEVENLABS_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPIU").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+AZURE_SPEECH_KEY = os.environ.get("AZURE_SPEECH_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+AZURE_SPEECH_REGION = os.environ.get("AZURE_SPEECH_REGION", "eastus").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
+AZURE_SPEECH_ENDPOINT = os.environ.get("AZURE_SPEECH_ENDPOINT", "").strip().replace(chr(10),"").replace(chr(13),"")
 DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 
 # ── REQUEST MODELS ────────────────────────────────────────
