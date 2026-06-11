@@ -287,6 +287,26 @@ async def transcribe(request: Request):
 # ── SPEAK — ElevenLabs voice output (with markdown strip) ─
 @app.post("/speak")
 async def speak(req: SpeakRequest):
+    # ---- ELEVENLABS PRIMARY (founder cloned voice) ----
+    if ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID:
+        try:
+            el_url = "https://api.elevenlabs.io/v1/text-to-speech/" + ELEVENLABS_VOICE_ID
+            async with httpx.AsyncClient(timeout=20.0) as el_client:
+                el_r = await el_client.post(
+                    el_url,
+                    headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+                    json={"text": req.text, "model_id": "eleven_flash_v2_5"},
+                )
+            if el_r.status_code == 200 and el_r.content:
+                return StreamingResponse(
+                    iter([el_r.content]),
+                    media_type="audio/mpeg",
+                    headers={"X-TTS-Provider": "elevenlabs"},
+                )
+        except Exception:
+            pass  # fall through to Azure fallback
+    # ---- AZURE FALLBACK (proven path, unchanged) ----
+
     import traceback
     try:
         text = (req.text or "").strip()
