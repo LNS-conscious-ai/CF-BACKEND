@@ -44,7 +44,6 @@ ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "jVIYITU8x2yaOctTAPI
 AZURE_SPEECH_KEY = os.environ.get("AZURE_SPEECH_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 AZURE_SPEECH_REGION = os.environ.get("AZURE_SPEECH_REGION", "eastus").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 AZURE_SPEECH_ENDPOINT = os.environ.get("AZURE_SPEECH_ENDPOINT", "").strip().replace(chr(10),"").replace(chr(13),"")
-print("DEBUG_AZURE_KEY_LEN:", len(AZURE_SPEECH_KEY), "REGION:", AZURE_SPEECH_REGION, "ENDPOINT_LEN:", len(AZURE_SPEECH_ENDPOINT), flush=True)
 DEEPGRAM_API_KEY    = os.environ.get("DEEPGRAM_API_KEY", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
 
 # ── REQUEST MODELS ────────────────────────────────────────
