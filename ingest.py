@@ -5,12 +5,13 @@ Reads all JSONL files from corpus/ and loads into ChromaDB.
 Dual-schema fix: supports both 'content' and 'text' fields.
 """
 
+import os
 import pathlib
 import json
 import chromadb
 from chromadb.utils import embedding_functions
 
-CHROMADB_PATH = "/workspaces/CF-BACKEND/chromadb"
+CHROMADB_PATH = os.environ.get('CHROMADB_PATH', '/var/data/chromadb')
 CORPUS_PATH   = "/workspaces/CF-BACKEND/corpus"
 
 COLLECTIONS = {
