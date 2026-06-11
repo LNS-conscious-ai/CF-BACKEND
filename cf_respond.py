@@ -21,7 +21,7 @@ from chromadb.utils import embedding_functions
 # PATHS - Railway compatible
 # ============================================================
 
-BASE_DIR     = pathlib.Path(os.environ.get("APP_DIR", "/app"))
+BASE_DIR     = pathlib.Path(os.environ.get("APP_DIR", str(pathlib.Path(__file__).parent)))
 CHROMADB_DIR = pathlib.Path(os.environ.get("CHROMADB_PATH", "/app/chromadb"))
 PERSONAS_DIR = BASE_DIR / "personas"
 
