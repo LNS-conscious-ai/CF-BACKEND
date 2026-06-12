@@ -136,6 +136,8 @@ async def scribe_token():
                 headers={"xi-api-key": ELEVENLABS_API_KEY},
                 timeout=15,
             )
+            if resp.status_code != 200:
+                print(f"[SCRIBE] ElevenLabs error {resp.status_code}: {resp.text[:300]}")
             resp.raise_for_status()
             data = resp.json()
             return {"token": data.get("token", "")}
@@ -250,10 +252,12 @@ async def transcribe(request: Request):
                     timeout=30,
                 )
                 resp.raise_for_status()
+                print(f"[SCRIBE] Response {resp.status_code}: {resp.text[:300]}")
                 data = resp.json()
                 transcript = data.get("text", "").strip().replace(chr(10),"").replace(chr(13),"").replace(" ","")
                 return {"transcript": transcript}
         except Exception as e:
+            print(f"[SCRIBE] Exception: {type(e).__name__}: {e}")
             print(f"[SCRIBE ERROR] {e}")
             # Fall through to Deepgram if available
 
