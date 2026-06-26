@@ -7,3 +7,4 @@ sentence-transformers==3.0.1
 requests==2.32.3
 pydantic==2.9.2
 python-multipart==0.0.9
+supabase>=2.0.0
