@@ -19,8 +19,10 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from cf_respond import cf_respond, CRISIS_PATTERNS, CRISIS_RESPONSE, _client, _embed_fn
+from cf_supabase_backend import router as auth_router, save_chat_message, get_or_create_conversation, supabase
 
 app = FastAPI(title="CF Backend · LNS", version="1.1.0")
+app.include_router(auth_router)
 START_TIME = time.time()
 
 # ── CORS — lns.life frontend ──────────────────────────────
