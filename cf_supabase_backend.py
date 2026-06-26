@@ -149,7 +149,7 @@ async def get_me(authorization: Optional[str] = Header(None)):
 # ─── CONVERSATION ENDPOINTS ───────────────────────────────
 @router.post("/conversations")
 async def create_conversation(req: ConversationCreate, authorization: Optional[str] = Header(None)):
-    """Create a new conversation for logged-in user."""
+    """Get or create a conversation (reuses recent one with same intent to avoid duplicates)."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
@@ -159,10 +159,19 @@ async def create_conversation(req: ConversationCreate, authorization: Optional[s
         if not user.user:
             raise HTTPException(status_code=401, detail="Invalid token")
         
+        user_id = str(user.user.id)
+        intent = req.intent or "general"
+        
+        # GET: check for existing recent conversation with same intent
+        existing = supabase.table("conversations").select("*").eq("user_id", user_id).eq("intent", intent).order("updated_at", desc=True).limit(1).execute()
+        if existing.data:
+            return {"success": True, "conversation": existing.data[0]}
+        
+        # CREATE: only if none exists
         res = supabase.table("conversations").insert({
-            "user_id": str(user.user.id),
+            "user_id": user_id,
             "title": req.title,
-            "intent": req.intent
+            "intent": intent
         }).execute()
         
         return {"success": True, "conversation": res.data[0]}
