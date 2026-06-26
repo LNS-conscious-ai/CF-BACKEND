@@ -49,7 +49,7 @@ class GuestMessageCreate(BaseModel):
 # ─── AUTH ENDPOINTS ───────────────────────────────────────
 @router.post("/auth/signup")
 async def signup(req: SignupRequest):
-    """Register new user with email/password."""
+    """Register new user with email/password. Auto-confirms email + auto-login."""
     try:
         res = supabase.auth.sign_up({
             "email": req.email,
@@ -57,6 +57,32 @@ async def signup(req: SignupRequest):
             "options": {"data": {"name": req.name or ""}}
         })
         if res.user:
+            # Auto-confirm email so user can login without verifying
+            try:
+                supabase.auth.admin.update_user_by_id(
+                    res.user.id,
+                    {"email_confirm": True}
+                )
+            except Exception as confirm_err:
+                print(f"[Auto-confirm] Warning: {confirm_err}")
+
+            # Auto-login immediately, return token to frontend
+            try:
+                login_res = supabase.auth.sign_in_with_password({
+                    "email": req.email,
+                    "password": req.password
+                })
+                if login_res.session:
+                    return {
+                        "success": True,
+                        "user_id": str(res.user.id),
+                        "email": res.user.email,
+                        "access_token": login_res.session.access_token,
+                        "refresh_token": login_res.session.refresh_token
+                    }
+            except Exception as login_err:
+                print(f"[Auto-login] Warning: {login_err}")
+
             return {"success": True, "user_id": str(res.user.id), "email": res.user.email}
         return {"success": False, "error": "Signup failed"}
     except Exception as e:
