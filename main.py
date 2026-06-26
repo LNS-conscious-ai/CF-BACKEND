@@ -176,6 +176,24 @@ async def chat_stream(req: ChatRequest):
             }
             yield f"data: {json.dumps(meta)}\n\n"
 
+            # ─── Save messages to Supabase (best-effort) ───
+            try:
+                await save_chat_message(
+                    user_id=None,
+                    session_id=req.session_id,
+                    role="user",
+                    content=req.message
+                )
+                await save_chat_message(
+                    user_id=None,
+                    session_id=req.session_id,
+                    role="assistant",
+                    content=result.get("response", ""),
+                    persona=result.get("persona", "teacher")
+                )
+            except Exception as e:
+                print(f"[Supabase] Save error: {e}")
+
             words = result["response"].split(" ")
             for i, word in enumerate(words):
                 chunk = word if i == 0 else " " + word
