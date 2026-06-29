@@ -104,6 +104,7 @@ except Exception as _se:
 # ── CORS — lns.life frontend ──────────────────────────────
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # allow Vercel preview domains (phase-1 testing)
     allow_origins=[
         "https://www.lns.life",
         "https://lns.life",
