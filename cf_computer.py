@@ -538,7 +538,7 @@ RULES:
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.7,
-            "max_tokens": 800,
+            "max_tokens": 16000,
         }
 
         try:
@@ -553,7 +553,7 @@ RULES:
 
                 choice = data.get("choices", [{}])[0]
                 message = choice.get("message", {})
-                content = message.get("content", "")
+                content = message.get("content") or message.get("reasoning_content") or ""
 
                 usage = data.get("usage", {})
                 tokens_used = usage.get("total_tokens", 0)
