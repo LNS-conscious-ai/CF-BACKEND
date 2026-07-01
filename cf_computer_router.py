@@ -171,6 +171,32 @@ def _increment_usage(user_id: str) -> None:
         print(f"[WARN] Failed to increment usage: {e}")
 
 
+def _upload_pdf_to_storage(pdf_path: str, report_id: str) -> bool:
+    """
+    Upload the generated PDF to the Supabase Storage 'reports' bucket so the
+    public download URL (.../storage/v1/object/public/reports/{id}.pdf) is durable
+    and survives server redeploys / preview sleep. Best-effort: on any failure we
+    log and return False; the local StaticFiles copy at {backend}/reports/{id}.pdf
+    still serves the file, so a report is never lost.
+    """
+    if supabase is None:
+        return False
+    try:
+        with open(pdf_path, "rb") as fh:
+            file_bytes = fh.read()
+        # supabase-py v2 storage API; upsert overwrites if the object already exists.
+        supabase.storage.from_("reports").upload(
+            path=f"{report_id}.pdf",
+            file=file_bytes,
+            file_options={"content-type": "application/pdf", "upsert": "true"},
+        )
+        print(f"[STORAGE] Uploaded report {report_id}.pdf to Supabase 'reports' bucket")
+        return True
+    except Exception as e:
+        print(f"[WARN] Supabase Storage upload failed for {report_id}: {e}")
+        return False
+
+
 def _log_outcome(report_data: dict[str, Any], pdf_path: str) -> None:
     """Log report outcome to Supabase cf_reports table."""
     if supabase is None:
@@ -271,6 +297,9 @@ async def generate_report(request: ReportRequest) -> JSONResponse:
             },
         )
 
+    # ── 3b. Upload PDF to durable Supabase Storage (best-effort) ─
+    _upload_pdf_to_storage(pdf_path, report_data_obj.report_id)
+
     # ── 4. Increment usage & log outcome ───────────────────────
     _increment_usage(request.user_id)
     _log_outcome(report_data_obj.to_dict(), pdf_path)
@@ -348,6 +377,7 @@ async def generate_report_stream(request: ReportRequest) -> StreamingResponse:
             yield f"event: error\ndata: {{\"error_code\": \"PDF_GENERATION_FAILED\", \"message\": \"{str(e)}\"}}\n\n"
             return
 
+        _upload_pdf_to_storage(pdf_path, report_data_obj.report_id)
         _increment_usage(request.user_id)
         _log_outcome(report_data_obj.to_dict(), pdf_path)
 
