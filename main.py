@@ -101,14 +101,14 @@ try:
 except Exception as _se:
     print(f"[REPORTS] static mount failed: {_se}")
 
-# ── CORS — lns.life frontend ──────────────────────────────
+# ── CORS — lns.life frontend (production-locked; no wildcard) ──
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.vercel\.app",  # allow Vercel preview domains (phase-1 testing)
     allow_origins=[
-        "https://www.lns.life",
         "https://lns.life",
-        "https://lns-life-frontend.vercel.app",
+        "https://www.lns.life",
+        "https://lns-life-frontend.vercel.app",                              # production Vercel alias
+        "https://lns-life-frontend-git-phase-1-lns-cf-projects.vercel.app",  # phase-1 preview (testing)
         "http://localhost:3000",
         "http://localhost:8080",
     ],
