@@ -203,33 +203,27 @@ class PDFGenerator:
             report_data, 1, styles
         ))
 
-        # ── Section 3: Who Has This Problem ──────────────────────
+        # ── Section 3: What Already Exists (Competitor Scan → step index 2) ──
         story.extend(self._build_section(
-            "03", "Who Has This Problem", "#FB923C",
+            "03", "What Already Exists", "#FB923C",
             report_data, 2, styles
         ))
 
-        # ── Section 4: What Already Exists ───────────────────────
+        # ── Section 4: Your First Version (Target User & First Version → step index 3) ──
         story.extend(self._build_section(
-            "04", "What Already Exists", "#D4A853",
+            "04", "Your First Version", "#D4A853",
             report_data, 3, styles
         ))
 
-        # ── Section 5: Your First Version ────────────────────────
+        # ── Section 5: Your Next 7 Days (7-Day Action Plan → step index 4) ──
         story.extend(self._build_section(
-            "05", "Your First Version", "#A78BFA",
+            "05", "Your Next 7 Days", "#A78BFA",
             report_data, 4, styles
         ))
 
-        # ── Section 6: Your Next 7 Days ───────────────────────────
-        story.extend(self._build_section(
-            "06", "Your Next 7 Days", "#2DD4BF",
-            report_data, 5, styles
-        ))
-
-        # ── Section 7: A Conscious Review ────────────────────────
+        # ── Section 6: A Conscious Review (step index 5, rendered via conscious_review) ──
         story.append(Spacer(1, 1 * cm))
-        story.append(self._section_header("07", "A Conscious Review", "#D4A853"))
+        story.append(self._section_header("06", "A Conscious Review", "#2DD4BF"))
         story.append(Spacer(1, 0.5 * cm))
 
         conscious_review = report_data.get("conscious_review", "")
